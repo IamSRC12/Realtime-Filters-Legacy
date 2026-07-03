@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LiveFilters — Real-Time Camera Effects</title>
+  <meta name="description" content="14 high-quality real-time camera filters — pure WebGL, no API keys, runs on any device."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="load-ring"></div>
+  <p id="load-msg">Starting camera…</p>
+</div>
+
+<!-- Hidden video source -->
+<video id="videoInput" autoplay playsinline muted></video>
+<!-- WebGL canvas fills viewport -->
+<canvas id="canvasOutput"></canvas>
+
+<!-- Top HUD -->
+<div id="hud-top">
+  <div id="filter-badge">
+    <span id="filter-icon-hud">📷</span>
+    <span id="filter-name">Normal</span>
+  </div>
+  <div id="fps-badge">-- fps</div>
+</div>
+
+<!-- Bottom panel -->
+<div id="bottom-panel">
+
+  <!-- Intensity slider -->
+  <div id="intensity-row">
+    <span class="slider-label">Intensity</span>
+    <input type="range" id="intensitySlider" min="0" max="100" value="75"/>
+    <span id="intensity-val">75%</span>
+  </div>
+
+  <!-- Filter strip -->
+  <div id="filter-strip">
+    <button class="fb active" data-filter="normal"      data-icon="📷">Normal</button>
+    <button class="fb"        data-filter="anime"       data-icon="✨">Anime</button>
+    <button class="fb"        data-filter="cartoon"     data-icon="🎭">Cartoon</button>
+    <button class="fb"        data-filter="sketch"      data-icon="✏️">Sketch</button>
+    <button class="fb"        data-filter="neon"        data-icon="💡">Neon</button>
+    <button class="fb"        data-filter="dreamy"      data-icon="🌸">Dreamy</button>
+    <button class="fb"        data-filter="cyberpunk"   data-icon="🤖">Cyberpunk</button>
+    <button class="fb"        data-filter="oilpainting" data-icon="🎨">Oil Paint</button>
+    <button class="fb"        data-filter="watercolor"  data-icon="💧">Watercolor</button>
+    <button class="fb"        data-filter="vintage"     data-icon="📽️">Vintage</button>
+    <button class="fb"        data-filter="pixelate"    data-icon="🕹️">Pixel Art</button>
+    <button class="fb"        data-filter="emboss"      data-icon="🗿">Emboss</button>
+    <button class="fb"        data-filter="thermal"     data-icon="🌡️">Thermal</button>
+    <button class="fb"        data-filter="infrared"    data-icon="🔴">Infrared</button>
+    <button class="fb"        data-filter="glitch"      data-icon="⚡">Glitch</button>
+  </div>
+
+</div>
+
+<!-- Camera error -->
+<div id="cam-error" class="hidden">
+  <div class="error-box">
+    <span style="font-size:3rem">📷</span>
+    <h2>Camera access needed</h2>
+    <p>Allow camera access in your browser then reload.<br>
+       Must be served from <code>localhost</code> or <code>https://</code></p>
+    <button onclick="location.reload()">Reload</button>
+  </div>
+</div>
+
+<script src="utils/CameraManager.js"></script>
+<script src="utils/FPSCounter.js"></script>
+<script src="filters/FilterEngine.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
