@@ -1,0 +1,1313 @@
+================================================================================
+TIMESTAMP: 2026-07-28 14:00:00
+FILE PATH: utils/FPSCounter.js
+ACTION: Created
+================================================================================
+/**
+ * FPSCounter.js
+ * Tracks real-time frames per second and updates a DOM element.
+ */
+class FPSCounter {
+  constructor(el) {
+    this.el        = el;
+    this.frames    = 0;
+    this.lastTime  = performance.now();
+  }
+
+  tick() {
+    this.frames++;
+    const now   = performance.now();
+    const delta = now - this.lastTime;
+    if (delta >= 500) {
+      const fps = Math.round((this.frames * 1000) / delta);
+      this.frames   = 0;
+      this.lastTime = now;
+      this.el.textContent = `${fps} fps`;
+      const color = fps >= 25 ? '#10b981' : fps >= 15 ? '#f59e0b' : '#ef4444';
+      this.el.style.color       = color;
+      this.el.style.borderColor = `${color}40`;
+      this.el.style.background  = `${color}15`;
+    }
+  }
+}
+
+================================================================================
+TIMESTAMP: 2026-07-28 14:00:00
+FILE PATH: utils/CameraManager.js
+ACTION: Created
+================================================================================
+/**
+ * CameraManager.js
+ * Handles webcam access and stream management
+ */
+class CameraManager {
+  constructor(videoElement) {
+    this.video      = videoElement;
+    this.stream     = null;
+    this.facingMode = 'user';
+  }
+
+  async start() {
+    const constraints = {
+      video: {
+        facingMode: this.facingMode,
+        width:     { ideal: 1280 },
+        height:    { ideal: 720 },
+        frameRate: { ideal: 30, max: 60 }
+      },
+      audio: false
+    };
+    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+    this.video.srcObject = this.stream;
+    await new Promise(resolve => {
+      this.video.onloadedmetadata = () => { this.video.play(); resolve(); };
+    });
+    return true;
+  }
+
+  stop() {
+    if (this.stream) {
+      this.stream.getTracks().forEach(t => t.stop());
+      this.stream = null;
+    }
+  }
+
+  async toggleCamera() {
+    this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
+    this.stop();
+    await this.start();
+  }
+
+  get width()  { return this.video.videoWidth; }
+  get height() { return this.video.videoHeight; }
+  get isReady() { return this.video.readyState === this.video.HAVE_ENOUGH_DATA; }
+}
+
+================================================================================
+TIMESTAMP: 2026-07-28 14:00:00
+FILE PATH: shaders/neon.frag
+ACTION: Created
+================================================================================
+/* Neon Filter */
+precision highp float;
+uniform sampler2D u_texture;
+uniform vec2 u_resolution;
+uniform float u_time;
+
+varying vec2 vUv;
+
+void main() {
+    vec2 uv = vUv;
+    vec4 color = texture2D(u_texture, uv);
+    
+    // Boost saturation
+    float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+    color.rgb = mix(color.rgb, vec3(gray), 0.3);
+    color.rgb = mix(color.rgb, color.rgb * 1.5, 0.4);
+    
+    // Add color pulses
+    float pulse = sin(u_time * 2.0) * 0.5 + 0.5;
+    color.rgb *= mix(vec3(1.0), vec3(0.7, 0.1, 0.8), pulse);
+    
+    // Add radial glow
+    vec2 center = vec2(0.5, 0.5);
+    float dist = length(uv - center);
+    float glow = smoothstep(0.6, 0.3, dist);
+    color.rgb += vec3(0.9, 0.1, 0.8) * glow * 0.5;
+    
+    // Add motion trails
+    float trail = sin(uv.x * 10.0 + u_time * 3.0) * 0.1;
+    color.rgb += vec3(0.8, 0.9, 0.1) * trail;
+    
+    gl_FragColor = color;
+}
+
+================================================================================
+TIMESTAMP: 2026-07-28 14:00:00
+FILE PATH: shaders/cyberpunk.frag
+ACTION: Created
+================================================================================
+/* Cyberpunk Filter */
+precision highp float;
+uniform sampler2D u_texture;
+uniform vec2 u_resolution;
+uniform float u_time;
+
+varying vec2 vUv;
+
+void main() {
+    vec2 uv = vUv;
+    vec4 color = texture2D(u_texture, uv);
+    
+    // Desaturate slightly
+    float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+    color.rgb = mix(color.rgb, vec3(gray), 0.1);
+    
+    // Add neon pink/cyan glow
+    vec3 neon = vec3(0.9, 0.0, 0.9);
+    vec3 glow = vec3(0.0, 0.9, 0.9);
+    
+    // Detect bright areas
+    float bright = max(color.r, max(color.g, color.b));
+    bright = smoothstep(0.8, 1.0, bright);
+    
+    // Add glow
+    color.rgb += neon * bright * 0.8;
+    color.rgb += glow * bright * 0.6;
+    
+    // Add scanlines
+    float scan = sin(uv.y * u_resolution.y * 2.0) * 0.1;
+    color.rgb *= 0.9 + scan;
+    
+    // Add CRT distortion
+    float distortion = sin(uv.y * 10.0 + u_time * 0.5) * 0.02;
+    uv.x += distortion;
+    
+    gl_FragColor = color;
+}
+
+================================================================================
+TIMESTAMP: 2026-07-28 14:00:00
+FILE PATH: shaders/anime.frag
+ACTION: Created
+================================================================================
+/* Anime Filter */
+precision highp float;
+uniform sampler2D u_texture;
+uniform vec2 u_resolution;
+uniform float u_time;
+
+varying vec2 vUv;
+
+void main() {
+    vec2 uv = vUv;
+    vec4 color = texture2D(u_texture, uv);
+    
+    // Cel shading: quantize colors
+    color.rgb = floor(color.rgb * 8.0) / 8.0;
+    
+    // Edge detection (sobel)
+    float strength = 0.2;
+    vec2 texelSize = 1.0 / u_resolution;
+    
+    float dx = texture2D(u_texture, uv + vec2(texelSize.x, 0.0)).r - texture2D(u_texture, uv - vec2(texelSize.x, 0.0)).r;
+    float dy = texture2D(u_texture, uv + vec2(0.0, texelSize.y)).r - texture2D(u_texture, uv - vec2(0.0, texelSize.y)).r;
+    float edge = length(vec2(dx, dy));
+    
+    // Apply edge outline
+    color.rgb = mix(color.rgb, vec3(0.0), smoothstep(0.0, 0.1, edge) * strength);
+    
+    gl_FragColor = color;
+}
+
+================================================================================
+TIMESTAMP: 2026-07-28 14:00:00
+FILE PATH: filters/FilterEngine.js
+ACTION: Created
+================================================================================
+/**
+ * FilterEngine.js — High-quality WebGL multi-pass filter engine
+ *
+ * UV strategy (fixes mirror artifact in multi-pass):
+ *  - UNPACK_FLIP_Y_WEBGL = true  → videoTex stored Y=0-at-bottom (GL convention)
+ *  - Vertex shader: standard UV (no flip)  → all passes consistent
+ *  - Mirror pass first: horizontal-flip camera into sourceFBO
+ *    so every subsequent pass sources from sourceFBO.tex with no UV tricks
+ *
+ * ponytail: crossfade removed — it was the _renderTarget source of corruption.
+ *           instant switch is imperceptible at 30+fps.
+ */
+
+/* ── Vertex shader: standard, no flips ─────────────────── */
+const VERT = `
+attribute vec2 a_pos;
+varying   vec2 v_uv;
+void main(){
+  v_uv        = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}`;
+
+/* ── Preamble injected into every fragment shader ────────── */
+const P = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+  precision highp float;
+#else
+  precision mediump float;
+#endif
+varying vec2      v_uv;
+uniform sampler2D u_tex;
+uniform sampler2D u_orig;
+uniform sampler2D u_edge;
+uniform float     u_t;
+uniform vec2      u_px;
+uniform float     u_time;
+
+float lum(vec3 c){ return dot(c,vec3(0.299,0.587,0.114)); }
+
+vec3 rgb2hsv(vec3 c){
+  vec4 K=vec4(0.,-1./3.,2./3.,-1.);
+  vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));
+  vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));
+  float d=q.x-min(q.w,q.y),e=1e-10;
+  return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);
+}
+vec3 hsv2rgb(vec3 c){
+  vec4 K=vec4(1.,2./3.,1./3.,3.);
+  return c.z*mix(K.xxx,clamp(abs(fract(c.xxx+K.xyz)*6.-K.www)-K.xxx,0.,1.),c.y);
+}
+`;
+
+/* ── Mirror/flip pass (horizontal) ── */
+const FS_FLIP = P + `
+void main(){
+  gl_FragColor = vec4(texture2D(u_tex, vec2(1.0-v_uv.x, v_uv.y)).rgb, 1.);
+}`;
+
+/* ── Pass-through blit ── */
+const FS_PASS = P + `
+void main(){ gl_FragColor = vec4(texture2D(u_tex, v_uv).rgb, 1.); }`;
+
+/* ──────────────────────────────────────────────────────────
+   SEPARABLE BILATERAL BLUR — edge-preserving smooth
+   Two separate passes (H + V) for quality + performance
+   sigS controls spatial spread, sigC controls colour threshold
+────────────────────────────────────────────────────────── */
+const FS_BIL_H = P + `
+void main(){
+  vec3 ctr=texture2D(u_tex,v_uv).rgb;
+  float sigS=2.0+u_t*5.0, sigC=0.10;
+  vec3 sum=vec3(0.); float wsum=0.;
+  for(int i=-6;i<=6;i++){
+    float x=float(i);
+    vec3 nb=texture2D(u_tex, v_uv+vec2(x*u_px.x*sigS,0.)).rgb;
+    float sw=exp(-x*x/(2.*sigS*sigS));
+    vec3 dc=ctr-nb;
+    float rw=exp(-dot(dc,dc)/(2.*sigC*sigC));
+    float w=sw*rw; sum+=nb*w; wsum+=w;
+  }
+  gl_FragColor=vec4(sum/wsum,1.);
+}`;
+
+const FS_BIL_V = P + `
+void main(){
+  vec3 ctr=texture2D(u_tex,v_uv).rgb;
+  float sigS=2.0+u_t*5.0, sigC=0.10;
+  vec3 sum=vec3(0.); float wsum=0.;
+  for(int i=-6;i<=6;i++){
+    float y=float(i);
+    vec3 nb=texture2D(u_tex, v_uv+vec2(0.,y*u_px.y*sigS)).rgb;
+    float sw=exp(-y*y/(2.*sigS*sigS));
+    vec3 dc=ctr-nb;
+    float rw=exp(-dot(dc,dc)/(2.*sigC*sigC));
+    float w=sw*rw; sum+=nb*w; wsum+=w;
+  }
+  gl_FragColor=vec4(sum/wsum,1.);
+}`;
+
+/* ── Separable Gaussian blur (for glow / DOF effects) ── */
+const FS_GAUSS_H = P + `
+void main(){
+  float sig=1.5+u_t*4.0;
+  vec3 s=vec3(0.); float w=0.;
+  for(int i=-5;i<=5;i++){
+    float x=float(i);
+    float wt=exp(-x*x/(2.*sig*sig));
+    s+=texture2D(u_tex,v_uv+vec2(x*u_px.x*sig,0.)).rgb*wt;
+    w+=wt;
+  }
+  gl_FragColor=vec4(s/w,1.);
+}`;
+const FS_GAUSS_V = P + `
+void main(){
+  float sig=1.5+u_t*4.0;
+  vec3 s=vec3(0.); float w=0.;
+  for(int i=-5;i<=5;i++){
+    float y=float(i);
+    float wt=exp(-y*y/(2.*sig*sig));
+    s+=texture2D(u_tex,v_uv+vec2(0.,y*u_px.y*sig)).rgb*wt;
+    w+=wt;
+  }
+  gl_FragColor=vec4(s/w,1.);
+}`;
+
+/* ── Sobel edge detection → stores magnitude in .r ── */
+const FS_SOBEL = P + `
+void main(){
+  vec2 p=u_px;
+  float tl=lum(texture2D(u_tex,v_uv+vec2(-p.x,-p.y)).rgb);
+  float tm=lum(texture2D(u_tex,v_uv+vec2(0.,-p.y)).rgb);
+  float tr=lum(texture2D(u_tex,v_uv+vec2(p.x,-p.y)).rgb);
+  float ml=lum(texture2D(u_tex,v_uv+vec2(-p.x,0.)).rgb);
+  float mr=lum(texture2D(u_tex,v_uv+vec2(p.x,0.)).rgb);
+  float bl=lum(texture2D(u_tex,v_uv+vec2(-p.x,p.y)).rgb);
+  float bm=lum(texture2D(u_tex,v_uv+vec2(0.,p.y)).rgb);
+  float br=lum(texture2D(u_tex,v_uv+vec2(p.x,p.y)).rgb);
+  float gx=-tl-2.*ml-bl+tr+2.*mr+br;
+  float gy=-tl-2.*tm-tr+bl+2.*bm+br;
+  float e=sqrt(gx*gx+gy*gy);
+  gl_FragColor=vec4(e,e,e,1.);
+}`;
+
+/* ══════════════════════════════════════════════════════
+   COMPOSITE FILTER SHADERS
+   u_tex  = processed (blurred/glow etc.)
+   u_orig = camera source (mirrorFBO)
+   u_edge = Sobel edge map
+══════════════════════════════════════════════════════ */
+
+/* ── NORMAL ── */
+const FS_NORMAL = P + `
+void main(){ gl_FragColor=vec4(texture2D(u_orig,v_uv).rgb,1.); }`;
+
+/* ── ANIME — true 2D cel-art look
+   Pipeline: 4× bilateral smooth → 4-band hard cel → shadow tint → specular → ink
+
+   Key visual signatures of anime:
+   • Very flat colour regions (no texture)
+   • Hard DISTINCT brightness bands (4 max)
+   • Shadows are COOL (blue-purple) not just darker
+   • Highlights blow to warm white
+   • Sharp thin ink outlines
+── */
+const FS_ANIME = P + `
+void main(){
+  vec3  s    = texture2D(u_tex,  v_uv).rgb;   /* 4× bilateral smooth       */
+  float edge = texture2D(u_edge, v_uv).r;      /* Sobel on original frame   */
+  vec3  hsv  = rgb2hsv(s);
+  float origV = hsv.z;
+  float origS = hsv.y;
+  float origH = hsv.x;
+
+  /* ── CONTRAST LIFT — push pixels toward extremes for visible bands ── */
+  /* Anime has high contrast: darks are dark, lights are light */
+  float v = clamp((origV - 0.45) * 1.55 + 0.45, 0.0, 1.0);
+
+  /* ── 4-BAND HARD CEL SHADING ── */
+  /* AA = 0.014: tight transition = graphical flat look */
+  float aa  = 0.014;
+  float cel = 0.06;                                                  /* deep shadow  */
+  cel = mix(cel, 0.33, smoothstep(0.22-aa, 0.22+aa, v));            /* shadow       */
+  cel = mix(cel, 0.62, smoothstep(0.46-aa, 0.46+aa, v));            /* base/mid     */
+  cel = mix(cel, 0.92, smoothstep(0.76-aa, 0.76+aa, v));            /* highlight    */
+
+  /* ── SHADOW MASK for colour adjustments ── */
+  float inShadow   = 1.0 - smoothstep(0.0,  0.38, cel);             /* dark regions */
+  float inHighlight= smoothstep(0.75, 0.92, cel);                   /* light regions*/
+  float inMid      = 1.0 - inShadow - inHighlight;
+  inMid            = clamp(inMid, 0., 1.);
+
+  /* ── HUE: shift shadows toward blue-indigo (anime cool shadow) ── */
+  float hShift = -0.07 * inShadow * u_t           /* cool in shadow  */
+               + 0.01  * inHighlight * u_t;        /* slight warm up in light */
+  hsv.x = fract(origH + hShift);
+
+  /* ── SATURATION: vivid mid, muted extremes ── */
+  float sMid  = 1.6 + 0.5 * u_t;          /* mids: high saturation */
+  float sSha  = 0.7;                        /* shadows: desaturated  */
+  float sHi   = 0.5 + 0.3 * u_t;          /* highlights: pale       */
+  float satMul= sSha * inShadow + sMid * inMid + sHi * inHighlight;
+  hsv.y = clamp(origS * satMul, 0., 1.);
+
+  /* Apply cel brightness */
+  hsv.z = cel;
+  vec3 col = hsv2rgb(hsv);
+
+  /* ── BLUE-PURPLE SHADOW TINT ── */
+  /* Anime shadow colour = local colour desaturated + cool bias */
+  vec3 shadowCol = mix(col, vec3(0.08, 0.10, 0.22), 0.55);
+  col = mix(col, shadowCol, inShadow * u_t * 0.75);
+
+  /* ── HIGHLIGHT SPECULAR SPARK — very tight, no spread ── */
+  /* Anime highlights are distinct: sharp white specular on curves */
+  float spec = smoothstep(0.90, 0.995, cel) * u_t;
+  col += vec3(0.45, 0.40, 0.55) * spec;
+
+  /* ── INK OUTLINES: thin, black, never thick ── */
+  /* Sobel threshold tuned for thin visible lines, not thick cartoon borders */
+  float ink = smoothstep(0.18, 0.22, edge) * u_t;
+  /* Scale ink by shadow mask — thicker in shadows (anime convention) */
+  float shadowInk = 1.0 - smoothstep(0.0, 0.25, cel);
+  ink = mix(ink, 1.0, shadowInk * 0.45);
+  col = mix(col, vec3(0.0), ink * 0.85);
+
+  gl_FragColor = vec4(col, 1.);
+}`;
+
+/* ── CARTOON — 3-band cel + edge outlines ── */
+const FS_CARTOON = P + `
+void main(){
+  vec3  s    = texture2D(u_tex,  v_uv).rgb;
+  float edge = texture2D(u_edge, v_uv).r;
+  float v    = luminance(s);
+  float cel  = mix(0.08, 0.92, smoothstep(0.25,0.75,v));
+  vec3  col  = s / (v + 0.001) * cel;
+  float ink  = smoothstep(0.15,0.2, edge) * u_t;
+  col = mix(col, vec3(0.), ink*0.8);
+  gl_FragColor = vec4(col, 1.);
+}`;
+
+/* ── SKETCH: dodge-blend w/ blurred negative ── */
+const FS_SKETCH = P + `
+void main(){
+  vec3 src = texture2D(u_orig, v_uv).rgb;
+  vec3 blr = texture2D(u_tex,  v_uv).rgb;
+  vec3 dodged = clamp((src/(1.0-blr+0.001)) - 0.15, 0., 1.);
+  gl_FragColor = vec4(mix(src, dodged, u_t), 1.);
+}`;
+
+/* ── WATERCOLOUR: bilateral-smooth src, mix with punch ── */
+const FS_WATERCOLOR = P + `
+void main(){
+  vec3 blr = texture2D(u_tex,  v_uv).rgb;
+  vec3 src = texture2D(u_orig, v_uv).rgb;
+  vec3 col = mix(blr*1.15, src, 0.25);
+  col = clamp(col+0.04, 0., 1.);
+  gl_FragColor = vec4(mix(src, col, u_t), 1.);
+}`;
+
+/* ── NEON: edge glow + vibrant tint ── */
+const FS_NEON = P + `
+void main(){
+  vec3 src  = texture2D(u_orig, v_uv).rgb;
+  vec3 blr  = texture2D(u_tex,  v_uv).rgb;
+  float e   = texture2D(u_edge, v_uv).r;
+  float hue = src.r;
+  vec3 glow = vec3(0);
+  glow     += vec3(0.9,0.2,0.9)*smoothstep(0.12,0.7,e)*hue;
+  glow     += vec3(0.1,0.9,0.9)*smoothstep(0.07,0.5,e)*(1.-hue);
+  vec3 col  = src + glow * u_t * 1.6;
+  gl_FragColor = vec4(col, 1.);
+}`;
+
+/* ── DREAMY: soft bloom glow + desaturation ── */
+const FS_DREAMY = P + `
+void main(){
+  vec3 src = texture2D(u_orig, v_uv).rgb;
+  vec3 g   = texture2D(u_tex,  v_uv).rgb;
+  vec3 col = src + g * 0.35 * u_t;
+  col = mix(col, vec3(dot(col,vec3(0.3,0.4,0.3))), 0.15*u_t);
+  col = clamp(col, 0., 1.);
+  gl_FragColor = vec4(col, 1.);
+}`;
+
+/* ── CYBERPUNK: high-contrast, neon cyan/magenta glow on edges ── */
+const FS_CYBERPUNK = P + `
+void main(){
+  vec3 src   = texture2D(u_orig, v_uv).rgb;
+  float edge = texture2D(u_edge, v_uv).r;
+  float v    = luminance(src);
+  vec3 cyan  = vec3(0.0, 0.85, 0.95);
+  vec3 mag   = vec3(1.0, 0.05, 0.60);
+  vec3 col   = src * (0.7 + 0.5 * v);
+  col       += cyan * smoothstep(0.1, 0.6, edge) * u_t * 0.9;
+  col       += mag  * smoothstep(0.3, 0.8, edge) * u_t * 0.5;
+  col = clamp(col, 0., 1.);
+  gl_FragColor = vec4(col, 1.);
+}`;
+
+/* ── OIL PAINTING: high-pass + sharpen-style ── */
+const FS_OILPAINT = P + `
+void main(){
+  vec3 src = texture2D(u_orig, v_uv).rgb;
+  vec3 blr = texture2D(u_tex,  v_uv).rgb;
+  vec3 col = clamp(src + (src - blr) * 1.8, 0., 1.);
+  col = mix(src, col, u_t);
+  gl_FragColor = vec4(col, 1.);
+}`;
+
+/* ── VINTAGE: sepia + vignette + grain ── */
+const FS_VINTAGE = P + `
+void main(){
+  vec3 src = texture2D(u_orig, v_uv).rgb;
+  vec3 sepia = vec3(dot(src, vec3(0.40, 0.50, 0.10)));
+  float vig  = 1.0 - length(v_uv - 0.5) * 0.8;
+  float g    = (fract(sin(dot(v_uv*32., vec2(12.9898,78.233)))*43758.5453)-0.5)*0.04;
+  vec3 col   = mix(src, sepia*vec3(1.2,1.0,0.7), u_t*0.6) * vig + g;
+  gl_FragColor = vec4(col, 1.);
+}`;
+
+/* ── PIXELATE (Pixel Art): nearest-neighbour grid ── */
+const FS_PIXELATE = P + `
+void main(){
+  float res = mix(180., 30., u_t);
+  vec2 xy = floor(v_uv * res) / res;
+  gl_FragColor = vec4(texture2D(u_orig, xy).rgb, 1.);
+}`;
+
+/* ── EMBOSS ── */
+const FS_EMBOSS = P + `
+void main(){
+  vec2 p=u_px;
+  vec3 tl=texture2D(u_orig,v_uv+vec2(-p.x,-p.y)).rgb;
+  vec3 br=texture2D(u_orig,v_uv+vec2(p.x,p.y)).rgb;
+  vec3 col=(tl-br+0.5)*u_t + texture2D(u_orig,v_uv).rgb*(1.-u_t);
+  gl_FragColor=vec4(col,1.);
+}`;
+
+/* ── THERMAL ── */
+const FS_THERMAL = P + `
+void main(){
+  vec3  src=texture2D(u_orig,v_uv).rgb;
+  float v=luminance(src)*0.7+0.2;
+  vec3 col=v<0.33?mix(vec3(0.,0.,0.8),vec3(0.,0.6,1.),v/0.33):
+          v<0.60?mix(vec3(0.,0.6,1.),vec3(1.,0.8,0.2),(v-0.33)/0.27):
+                 mix(vec3(1.,0.8,0.2),vec3(1.,0.,0.),(v-0.60)/0.40);
+  col*=1.25;
+  col=mix(src,col,u_t);
+  gl_FragColor=vec4(col,1.);
+}`;
+
+/* ── INFRARED ── */
+const FS_INFRARED = P + `
+void main(){
+  vec3  src=texture2D(u_orig,v_uv).rgb;
+  float ir=src.r*0.5+src.g*1.1+src.b*0.6;
+  ir=clamp(ir,0.,1.);
+  vec3 col=mix(vec3(ir),vec3(ir*0.85,ir*0.9,ir*1.1),u_t);
+  gl_FragColor=vec4(col,1.);
+}`;
+
+/* ── GLITCH ── */
+const FS_GLITCH = P + `
+void main(){
+  vec2 uv=v_uv;
+  float t=u_time*0.5+u_t*2.;
+  float line=step(0.97,sin(uv.y*600.+t*80.));
+  float shft=(sin(uv.y*300.+t*120.)*0.5+0.5)*0.04;
+  vec2 cuv=uv+vec2(shft*line,0.);
+  vec3 c=texture2D(u_orig,cuv).rgb;
+  if(line>0.5){c.g=texture2D(u_orig,uv-vec2(shft,0.)).g;}
+  vec3 col=mix(c,c*vec3(1.5,0.9,2.1),0.3*u_t);
+  gl_FragColor=vec4(col,1.);
+}`;
+
+/* ══════════════════════════════════════════════════════
+   FilterEngine class
+══════════════════════════════════════════════════════ */
+
+class FilterEngine {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.gl     = canvas.getContext('webgl', { premultipliedAlpha: false, preserveDrawingBuffer: true });
+
+    if (!this.gl) throw new Error('WebGL not available');
+
+    this.currentFilter = 'normal';
+    this.intensity     = 0.75;
+    this._programs    = {};
+    this._fbo         = [];
+    this._sourceFBO   = null;
+    this._edgeFBO     = null;
+    this._renderTarget= null;  /* removed — see ponytail note above */
+
+    this._init();
+  }
+
+  _init() {
+    const gl = this.gl;
+
+    /* ── Full-screen quad ── */
+    const q = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+    this._quadVAO = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this._quadVAO);
+    gl.bufferData(gl.ARRAY_BUFFER, q, gl.STATIC_DRAW);
+
+    /* ── Compile all programs ── */
+    const progDefs = {
+      flip:      { fs: FS_FLIP,     src: ['u_tex'] },
+      pass:      { fs: FS_PASS,     src: ['u_tex'] },
+      bilH:      { fs: FS_BIL_H,    src: ['u_tex'] },
+      bilV:      { fs: FS_BIL_V,    src: ['u_tex'] },
+      gaussH:    { fs: FS_GAUSS_H,  src: ['u_tex'] },
+      gaussV:    { fs: FS_GAUSS_V,  src: ['u_tex'] },
+      sobel:     { fs: FS_SOBEL,    src: ['u_tex'] },
+      normal:    { fs: FS_NORMAL,   src: ['u_orig'] },
+      anime:     { fs: FS_ANIME,    src: ['u_tex','u_orig','u_edge'] },
+      cartoon:   { fs: FS_CARTOON,  src: ['u_tex','u_orig','u_edge'] },
+      sketch:    { fs: FS_SKETCH,   src: ['u_tex','u_orig'] },
+      watercolor:{ fs: FS_WATERCOLOR,src:['u_tex','u_orig'] },
+      neon:      { fs: FS_NEON,     src: ['u_tex','u_orig','u_edge'] },
+      dreamy:    { fs: FS_DREAMY,   src: ['u_tex','u_orig'] },
+      cyberpunk: { fs: FS_CYBERPUNK,src: ['u_tex','u_orig','u_edge'] },
+      oilpainting:{fs: FS_OILPAINT, src: ['u_tex','u_orig'] },
+      vintage:   { fs: FS_VINTAGE,  src: ['u_orig'] },
+      pixelate:  { fs: FS_PIXELATE, src: ['u_orig'] },
+      emboss:    { fs: FS_EMBOSS,   src: ['u_orig'] },
+      thermal:   { fs: FS_THERMAL,  src: ['u_orig'] },
+      infrared:  { fs: FS_INFRARED, src: ['u_orig'] },
+      glitch:    { fs: FS_GLITCH,   src: ['u_orig'] },
+    };
+
+    for (const [name, def] of Object.entries(progDefs)) {
+      this._programs[name] = this._createProgram(VERT, def.fs);
+    }
+
+    /* ── Create FBO pool (2 for ping-pong multi-pass) ── */
+    for (let i = 0; i < 4; i++) this._fbo.push(this._createFBO());
+
+    /* ── Source / edge FBOs ── */
+    this._sourceFBO = this._createFBO();
+    this._edgeFBO   = this._createFBO();
+
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+  }
+
+  _createProgram(vsCode, fsCode) {
+    const gl  = this.gl;
+    const vs  = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vs, vsCode);
+    gl.compileShader(vs);
+    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+      console.warn('VS compile error:', gl.getShaderInfoLog(vs));
+    }
+    const fs  = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs, fsCode);
+    gl.compileShader(fs);
+    if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+      console.warn('FS compile error:', gl.getShaderInfoLog(fs));
+    }
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+    /* Enable vertex attrib */
+    const loc = gl.getAttribLocation(prog, 'a_pos');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    return prog;
+  }
+
+  _createFBO() {
+    const gl  = this.gl;
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.canvas.width, this.canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { fbo, tex };
+  }
+
+  /* ── Resize FBOs when canvas changes ── */
+  _resizeFBO(fboObj) {
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, fboObj.tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.canvas.width, this.canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  }
+  _ensureSize() {
+    if (this._sourceFBO) {
+      this._resizeFBO(this._sourceFBO);
+      this._resizeFBO(this._edgeFBO);
+      this._fbo.forEach(f => this._resizeFBO(f));
+    }
+  }
+
+  /* ── Draw a rect to the given FBO (or null = canvas) ── */
+  _draw(progName, srcTex, texTex, edgeTex, targetFBO) {
+    const gl   = this.gl;
+    const prog = this._programs[progName];
+    if (!prog) return;
+    gl.useProgram(prog);
+
+    /* Bind texture(s) */
+    const setTex = (name, tex, unit) => {
+      if (!tex) return;
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.uniform1i(gl.getUniformLocation(prog, name), unit);
+    };
+    setTex('u_orig', srcTex, 0);
+    setTex('u_tex',  texTex || srcTex, 1);
+    setTex('u_edge', edgeTex, 2);
+
+    /* Uniforms */
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_t'), this.intensity);
+    gl.uniform2f(gl.getUniformLocation(prog, 'u_px'), 1 / this.canvas.width, 1 / this.canvas.height);
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_time'), performance.now() / 1000);
+
+    /* Clip rect */
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+
+    /* Bind FBO */
+    gl.bindFramebuffer(gl.FRAMEBUFFER, targetFboOrNull(targetFBO));
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  /* ── Helpers ── */
+  _bilateral(src) {
+    this._draw('bilH', src,          null,  null,  this._fbo[0]);
+    this._draw('bilV', this._fbo[0].tex, null,  null,  null);
+    return this._fbo[1].tex; /* last result in _fbo[1] */
+  }
+  _gaussian(src) {
+    this._draw('gaussH', src,          null, null, this._fbo[0]);
+    this._draw('gaussV', this._fbo[0].tex, null, null, null);
+    return this._fbo[1].tex;
+  }
+  _sobel(src) {
+    this._draw('sobel', src, null, null, this._edgeFBO);
+    return this._edgeFBO.tex;
+  }
+
+  /* ── Main render ── */
+  render(video, dt) {
+    const gl = this.gl;
+    const w  = this.canvas.width;
+    const h  = this.canvas.height;
+
+    /* Check canvas size */
+    if (this.canvas.clientWidth !== w || this.canvas.clientHeight !== h) {
+      this.canvas.width  = this.canvas.clientWidth;
+      this.canvas.height = this.canvas.clientHeight;
+      this._ensureSize();
+    }
+
+    /* Upload video frame → tex via gl.texImage2D */
+    gl.bindTexture(gl.TEXTURE_2D, this._sourceFBO.tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this._sourceFBO.fbo);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    const src = this._sourceFBO.tex;
+    const f   = this.currentFilter;
+
+    switch (f) {
+      /* Multi-pass filters */
+      case 'anime': {
+        /* 4× bilateral passes for anime: produces the flat cel-shading
+           regions that make anime look like anime.
+           ponytail: yes this is 4 extra GPU passes vs cartoon's 2.
+           Ceiling: ~25fps on very low-end integrated GPU (720p). */
+        this._draw('bilH', src,              null, null, this._fbo[0]);
+        this._draw('bilV', this._fbo[0].tex, null, null, this._fbo[1]);
+        this._draw('bilH', this._fbo[1].tex, null, null, this._fbo[0]);
+        this._draw('bilV', this._fbo[0].tex, null, null, this._fbo[1]);
+        const smooth = this._fbo[1].tex;
+        /* Sobel on ORIGINAL source — preserves real edge positions */
+        const edges  = this._sobel(src);
+        this._draw('anime', smooth, smooth, edges, null);
+        break;
+      }
+      case 'cartoon': {
+        const smooth = this._bilateral(src);
+        const edges  = this._sobel(src);
+        this._draw('cartoon', smooth, smooth, edges, null);
+        break;
+      }
+      case 'sketch': {
+        const blurred = this._gaussian(src);
+        this._draw('sketch', blurred, src, null, null);
+        break;
+      }
+      case 'watercolor': {
+        const smooth = this._bilateral(src);
+        this._draw('watercolor', smooth, src, null, null);
+        break;
+      }
+      case 'neon': {
+        const blurred = this._gaussian(src);
+        const edges   = this._sobel(src);
+        this._draw('neon', blurred, src, edges, null);
+        break;
+      }
+      case 'dreamy': {
+        const blurred = this._gaussian(src);
+        this._draw('dreamy', blurred, src, null, null);
+        break;
+      }
+      case 'cyberpunk': {
+        const edges = this._sobel(src);
+        this._draw('cyberpunk', null, src, edges, null);
+        break;
+      }
+      /* Single-pass filters that only need src */
+      default:
+        this._draw(f, src, src, null, null);
+        break;
+    }
+  }
+
+  /* ponytail: instant switch, no crossfade (crossfade was the _renderTarget bug source) */
+  switchFilter(name) { this.currentFilter = name; }
+}
+
+================================================================================
+TIMESTAMP: 2026-07-28 14:00:00
+FILE PATH: main.js
+ACTION: Created
+================================================================================
+'use strict';
+/**
+ * main.js — app bootstrap + render loop + UI wiring
+ * Uses FilterEngine.switchFilter() for animated crossfade transitions.
+ * Keyboard arrow keys cycle through filters.
+ */
+
+/* ── DOM refs ── */
+const video       = document.getElementById('videoInput');
+const canvas      = document.getElementById('canvasOutput');
+const filterName  = document.getElementById('filter-name');
+const filterIcon  = document.getElementById('filter-icon-hud');
+const fpsBadge    = document.getElementById('fps-badge');
+const loadEl      = document.getElementById('loading');
+const loadMsg     = document.getElementById('load-msg');
+const camError    = document.getElementById('cam-error');
+const slider      = document.getElementById('intensitySlider');
+const intensityVal= document.getElementById('intensity-val');
+const filterBtns  = Array.from(document.querySelectorAll('.fb'));
+
+/* ── App state ── */
+let camera = null;
+let engine = null;
+let fps    = null;
+let rafId  = null;
+let lastTs = 0;
+
+/* ── Boot ── */
+document.addEventListener('DOMContentLoaded', startApp);
+
+async function startApp() {
+  try {
+    loadMsg.textContent = 'Starting camera…';
+    camera = new CameraManager(video);
+    await camera.start();
+
+    canvas.width  = camera.width  || 1280;
+    canvas.height = camera.height || 720;
+
+    loadMsg.textContent = 'Compiling shaders…';
+    engine = new FilterEngine(canvas);
+    fps    = new FPSCounter(fpsBadge);
+
+    /* Set initial intensity from slider */
+    engine.intensity = slider.value / 100;
+    slider.style.setProperty('--fill', `${slider.value}%`);
+
+    loadEl.style.display = 'none';
+    rafId = requestAnimationFrame(loop);
+  } catch (err) {
+    loadEl.style.display = 'none';
+    camError.classList.remove('hidden');
+    console.error('[LiveFilters]', err);
+  }
+}
+
+/* ── Render loop with delta time ── */
+function loop(ts) {
+  rafId = requestAnimationFrame(loop);
+  if (!camera || !camera.isReady) return;
+  const dt = Math.min((ts - lastTs) / 1000, 0.1); /* cap dt at 100ms */
+  lastTs = ts;
+  engine.render(video, dt);
+  fps.tick();
+}
+
+/* ── Filter switching with crossfade ── */
+function setFilter(name) {
+  engine.switchFilter(name);
+
+  filterBtns.forEach(b => b.classList.remove('active'));
+  const btn = filterBtns.find(b => b.dataset.filter === name);
+  if (btn) btn.classList.add('active');
+
+  /* Update HUD badge */
+  filterName.classList.remove('filter-name-anim');
+  void filterName.offsetWidth; /* force reflow */
+  filterName.classList.add('filter-name-anim');
+  filterName.textContent = btn ? btn.textContent.trim() : name;
+  filterIcon.textContent = btn ? btn.dataset.icon : '🎥';
+}
+
+filterBtns.forEach(btn => {
+  btn.addEventListener('click', () => setFilter(btn.dataset.filter));
+});
+
+/* ── Keyboard arrow keys ← → to cycle filters ── */
+const filterNames = filterBtns.map(b => b.dataset.filter);
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  const cur = filterNames.indexOf(engine ? engine.currentFilter : 'normal');
+  if (e.key === 'ArrowRight') setFilter(filterNames[(cur + 1) % filterNames.length]);
+  if (e.key === 'ArrowLeft')  setFilter(filterNames[(cur - 1 + filterNames.length) % filterNames.length]);
+});
+
+/* ── Intensity slider ── */
+slider.addEventListener('input', (e) => {
+  const v = Number(e.target.value);
+  intensityVal.textContent = `${v}%`;
+  slider.style.setProperty('--fill', `${v}%`);
+  if (engine) engine.intensity = v / 100;
+});
+
+/* ── Screenshot: S key ── */
+document.addEventListener('keydown', (e) => {
+  if (e.key === 's' || e.key === 'S') {
+    const a = document.createElement('a');
+    a.download = `livefilter-${engine.currentFilter}-${Date.now()}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  }
+});
+
+/* ── Cleanup ── */
+window.addEventListener('beforeunload', () => {
+  cancelAnimationFrame(rafId);
+  if (camera) camera.stop();
+});
+
+================================================================================
+TIMESTAMP: 2026-07-28 14:00:00
+FILE PATH: style.css
+ACTION: Created
+================================================================================
+/* ═══════════════════════════════════════════
+   LiveFilters — Premium Fullscreen UI
+   ─────────────────────────────────────────
+   Design: dark glass, violet accent, smooth
+═══════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --accent:       #8b5cf6;
+  --accent-glow:  rgba(139,92,246,0.45);
+  --pill:         rgba(10,10,18,0.72);
+  --pill-hover:   rgba(30,30,50,0.9);
+  --text:         #f8fafc;
+  --muted:        #94a3b8;
+  --border:       rgba(255,255,255,0.07);
+  --blur:         saturate(180%) blur(18px);
+  --ease:         cubic-bezier(0.25, 0, 0.1, 1);
+  --r:            999px;
+  --font:         'Inter', system-ui, sans-serif;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Camera / canvas ── */
+#videoInput {
+  position: fixed; width: 1px; height: 1px;
+  opacity: 0; pointer-events: none;
+}
+#canvasOutput {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+}
+
+/* ── Loading ── */
+#loading {
+  position: fixed; inset: 0; z-index: 999;
+  background: #05050f;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 20px;
+}
+.load-ring {
+  width: 48px; height: 48px;
+  border: 3px solid rgba(255,255,255,0.08);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#load-msg { font-size: 0.88rem; color: var(--muted); letter-spacing: 0.05em; }
+
+/* ── HUD top ── */
+#hud-top {
+  position: fixed; top: 18px;
+  left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  pointer-events: none; z-index: 100;
+}
+#filter-badge {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 16px;
+  background: var(--pill);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+}
+#filter-icon-hud { font-size: 1rem; }
+#filter-name {
+  font-size: 0.88rem; font-weight: 600;
+  letter-spacing: 0.01em;
+}
+#fps-badge {
+  padding: 7px 13px;
+  background: var(--pill);
+  border: 1px solid rgba(16,185,129,0.25);
+  border-radius: var(--r);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  font-family: 'SF Mono', monospace;
+  font-size: 0.78rem;
+  color: #10b981;
+}
+
+/* ── Bottom panel ── */
+#bottom-panel {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  z-index: 100;
+  padding: 14px 18px 28px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 100%);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+/* ── Intensity slider ── */
+#intensity-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 16px;
+  background: var(--pill);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  width: fit-content;
+  align-self: center;
+}
+.slider-label {
+  font-size: 0.78rem; font-weight: 500;
+  color: var(--muted); white-space: nowrap;
+}
+#intensitySlider {
+  -webkit-appearance: none;
+  width: 160px; height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--fill, 75%),
+    rgba(255,255,255,0.12) var(--fill, 75%)
+  );
+  border-radius: 2px; outline: none; cursor: pointer;
+}
+#intensitySlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  background: #fff;
+  border: 3px solid var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-glow);
+  cursor: pointer;
+  transition: transform 0.15s var(--ease);
+}
+#intensitySlider::-webkit-slider-thumb:hover { transform: scale(1.25); }
+#intensity-val {
+  font-size: 0.78rem; font-family: monospace;
+  color: var(--accent); min-width: 32px; text-align: right;
+}
+
+/* ── Filter strip ── */
+#filter-strip {
+  display: flex; align-items: center; gap: 7px;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; padding-bottom: 2px;
+}
+#filter-strip::-webkit-scrollbar { display: none; }
+
+/* ── Filter pills ── */
+.fb {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 9px 16px;
+  background: var(--pill);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 0.80rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  user-select: none;
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  transition:
+    background   0.22s var(--ease),
+    border-color 0.22s var(--ease),
+    color        0.22s var(--ease),
+    transform    0.22s var(--ease),
+    box-shadow   0.22s var(--ease);
+  /* Emoji icon via data-icon */
+  position: relative;
+}
+.fb::before {
+  content: attr(data-icon);
+  font-size: 1rem;
+}
+.fb:hover {
+  background: var(--pill-hover);
+  color: var(--text);
+  border-color: rgba(255,255,255,0.18);
+  transform: translateY(-2px);
+}
+.fb.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 22px var(--accent-glow), 0 2px 12px rgba(0,0,0,0.5);
+  transform: translateY(-3px);
+}
+.fb:active { transform: scale(0.94) translateY(0); }
+
+/* ── Transition: label pop animation ── */
+@keyframes labelPop {
+  0%   { transform: scale(0.85) translateX(-50%); opacity: 0; }
+  60%  { transform: scale(1.08) translateX(-50%); }
+  100% { transform: scale(1)    translateX(-50%); opacity: 1; }
+}
+.filter-name-anim { animation: labelPop 0.25s var(--ease) forwards; }
+
+/* ── Camera error ── */
+#cam-error {
+  position: fixed; inset: 0; z-index: 500;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.88);
+}
+#cam-error.hidden { display: none; }
+.error-box {
+  text-align: center; padding: 40px 32px;
+  background: rgba(12,12,22,0.98);
+  border: 1px solid var(--border);
+  border-radius: 20px; max-width: 340px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.error-box h2 { font-size: 1.15rem; font-weight: 700; }
+.error-box p  { font-size: 0.88rem; color: var(--muted); line-height: 1.6; }
+.error-box code {
+  background: rgba(255,255,255,0.06);
+  padding: 1px 6px; border-radius: 4px;
+  font-size: 0.82rem;
+}
+.error-box button {
+  padding: 11px 28px;
+  background: var(--accent); border: none;
+  border-radius: var(--r); color: #fff;
+  font-family: var(--font); font-size: 0.9rem; font-weight: 700;
+  cursor: pointer; transition: opacity 0.15s;
+}
+.error-box button:hover { opacity: 0.85; }
+
+/* ── Keyboard shortcut hint ── */
+#key-hint {
+  position: fixed; bottom: 110px; right: 18px;
+  font-size: 0.72rem; color: rgba(255,255,255,0.3);
+  pointer-events: none; z-index: 100;
+  letter-spacing: 0.03em;
+}
+
+/* ── Mobile ── */
+@media (max-width: 480px) {
+  .fb { padding: 8px 13px; font-size: 0.75rem; }
+  #intensity-row { display: none; }   /* hide on tiny screens */
+  #hud-top { top: 10px; }
+}
+
+================================================================================
+TIMESTAMP: 2026-07-28 14:00:00
+FILE PATH: index.html
+ACTION: Created
+================================================================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LiveFilters — Real-Time Camera Effects</title>
+  <meta name="description" content="14 high-quality real-time camera filters — pure WebGL, no API keys, runs on any device."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="load-ring"></div>
+  <p id="load-msg">Starting camera…</p>
+</div>
+
+<!-- Hidden video source -->
+<video id="videoInput" autoplay playsinline muted></video>
+<!-- WebGL canvas fills viewport -->
+<canvas id="canvasOutput"></canvas>
+
+<!-- Top HUD -->
+<div id="hud-top">
+  <div id="filter-badge">
+    <span id="filter-icon-hud">📷</span>
+    <span id="filter-name">Normal</span>
+  </div>
+  <div id="fps-badge">-- fps</div>
+</div>
+
+<!-- Bottom panel -->
+<div id="bottom-panel">
+
+  <!-- Intensity slider -->
+  <div id="intensity-row">
+    <span class="slider-label">Intensity</span>
+    <input type="range" id="intensitySlider" min="0" max="100" value="75"/>
+    <span id="intensity-val">75%</span>
+  </div>
+
+  <!-- Filter strip -->
+  <div id="filter-strip">
+    <button class="fb active" data-filter="normal"      data-icon="📷">Normal</button>
+    <button class="fb"        data-filter="anime"       data-icon="✨">Anime</button>
+    <button class="fb"        data-filter="cartoon"     data-icon="🎭">Cartoon</button>
+    <button class="fb"        data-filter="sketch"      data-icon="✏️">Sketch</button>
+    <button class="fb"        data-filter="neon"        data-icon="💡">Neon</button>
+    <button class="fb"        data-filter="dreamy"      data-icon="🌸">Dreamy</button>
+    <button class="fb"        data-filter="cyberpunk"   data-icon="🤖">Cyberpunk</button>
+    <button class="fb"        data-filter="oilpainting" data-icon="🎨">Oil Paint</button>
+    <button class="fb"        data-filter="watercolor"  data-icon="💧">Watercolor</button>
+    <button class="fb"        data-filter="vintage"     data-icon="📽️">Vintage</button>
+    <button class="fb"        data-filter="pixelate"    data-icon="🕹️">Pixel Art</button>
+    <button class="fb"        data-filter="emboss"      data-icon="🗿">Emboss</button>
+    <button class="fb"        data-filter="thermal"     data-icon="🌡️">Thermal</button>
+    <button class="fb"        data-filter="infrared"    data-icon="🔴">Infrared</button>
+    <button class="fb"        data-filter="glitch"      data-icon="⚡">Glitch</button>
+  </div>
+
+</div>
+
+<!-- Camera error -->
+<div id="cam-error" class="hidden">
+  <div class="error-box">
+    <span style="font-size:3rem">📷</span>
+    <h2>Camera access needed</h2>
+    <p>Allow camera access in your browser then reload.<br>
+       Must be served from <code>localhost</code> or <code>https://</code></p>
+    <button onclick="location.reload()">Reload</button>
+  </div>
+</div>
+
+<script src="utils/CameraManager.js"></script>
+<script src="utils/FPSCounter.js"></script>
+<script src="filters/FilterEngine.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
+
+================================================================================
